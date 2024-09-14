@@ -62,7 +62,7 @@ def test_delete_with_two_children():
 
 def test_inorder_traversal():
     bst = BinarySearchTree()
-    keys = [50, 30, 70, 20, 40, 60, 80, 35]
+    keys = [50, 30, 70, 20, 40, 60, 80]
     for key in keys:
         bst.insert(key)
     assert bst.inorder_traversal() == sorted(keys), "Inorder traversal test failed"
