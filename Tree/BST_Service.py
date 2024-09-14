@@ -1,8 +1,22 @@
 from flask import Flask, request, jsonify
-from bst import BinarySearchTree
+from Tree.BST import BinarySearchTree
 
 app = Flask(__name__)
 bst = BinarySearchTree()
+
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({
+        "message": "Welcome to the Binary Search Tree API",
+        "endpoints": {
+            "/": "Home page (GET)",
+            "/insert": "Insert a key (POST)",
+            "/search/<key>": "Search for a key (GET)",
+            "/delete/<key>": "Delete a key (DELETE)",
+            "/traverse": "Get inorder traversal (GET)",
+            "/create": "Create a tree with multiple keys (POST)"
+        }
+    }), 200
 
 @app.route('/insert', methods=['POST'])
 def insert():
