@@ -26,10 +26,10 @@ pipeline {
                     python3 -m virtualenv venv
                     . venv/bin/activate
                     echo "Installing requirements:"
-                    if [ -f requirements.txt ]; then
-                        pip install -r requirements.txt  --break-system-packages
+                    if [ -f Testing/Tree/requirements.txt ]; then
+                        pip install -r Testing/Tree/requirements.txt --break-system-package
                     else
-                        echo "requirements.txt not found. This is unexpected."
+                        echo "requirements.txt not found in Testing/Tree/. Please check the file location."
                         exit 1
                     fi
                     echo "Installed packages:"
@@ -41,10 +41,10 @@ pipeline {
             steps {
                 sh '''
                     . venv/bin/activate
-                    if [ -f tree-testing.py ]; then
-                        python3 tree-testing.py
+                    if [ -f Testing/Tree/tree-testing.py ]; then
+                        python3 Testing/Tree/tree-testing.py
                     else
-                        echo "tree-testing.py not found. Please ensure it's in the correct location."
+                        echo "tree-testing.py not found in Testing/Tree/. Please check the file location."
                         exit 1
                     fi
                 '''
