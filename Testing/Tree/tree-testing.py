@@ -6,32 +6,74 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from Tree.BST import BinarySearchTree
 
-def test_bst():
-    # Create a new BST
+def test_insert():
     bst = BinarySearchTree()
+    bst.insert(50)
+    bst.insert(30)
+    bst.insert(70)
+    assert bst.inorder_traversal() == [30, 50, 70], "Insert test failed"
+    print("Insert test passed")
 
-    # Test insertion
-    keys = [50, 30, 20, 40, 70, 60, 80]
+def test_search_existing():
+    bst = BinarySearchTree()
+    bst.insert(50)
+    bst.insert(30)
+    bst.insert(70)
+    assert bst.search(30) is not None, "Search existing test failed"
+    print("Search existing test passed")
+
+def test_search_non_existing():
+    bst = BinarySearchTree()
+    bst.insert(50)
+    bst.insert(30)
+    bst.insert(70)
+    assert bst.search(40) is None, "Search non-existing test failed"
+    print("Search non-existing test passed")
+
+def test_delete_leaf():
+    bst = BinarySearchTree()
+    bst.insert(50)
+    bst.insert(30)
+    bst.insert(70)
+    bst.delete(30)
+    assert bst.inorder_traversal() == [50, 70], "Delete leaf test failed"
+    print("Delete leaf test passed")
+
+def test_delete_with_one_child():
+    bst = BinarySearchTree()
+    bst.insert(50)
+    bst.insert(30)
+    bst.insert(70)
+    bst.insert(60)
+    bst.delete(70)
+    assert bst.inorder_traversal() == [30, 50, 60], "Delete with one child test failed"
+    print("Delete with one child test passed")
+
+def test_delete_with_two_children():
+    bst = BinarySearchTree()
+    bst.insert(50)
+    bst.insert(30)
+    bst.insert(70)
+    bst.insert(60)
+    bst.insert(80)
+    bst.delete(70)
+    assert bst.inorder_traversal() == [30, 50, 60, 80], "Delete with two children test failed"
+    print("Delete with two children test passed")
+
+def test_inorder_traversal():
+    bst = BinarySearchTree()
+    keys = [50, 30, 70, 20, 40, 60, 80]
     for key in keys:
         bst.insert(key)
-    print("BST created with keys:", keys)
+    assert bst.inorder_traversal() == sorted(keys), "Inorder traversal test failed"
+    print("Inorder traversal test passed")
 
-    # Test inorder traversal
-    print("Inorder traversal:", bst.inorder_traversal())
-
-    # Test search
-    for key in [20, 55]:
-        result = bst.search(key)
-        print(f"Search for {key}: {'Found' if result else 'Not Found'}")
-
-    # Test deletion
-    delete_key = 30
-    bst.delete(delete_key)
-    print(f"Deleted {delete_key}")
-    print("Inorder traversal after deletion:", bst.inorder_traversal())
-
-    # Test edge cases
-    bst.insert(10)  # Insert a new minimum
-    bst.insert(90)  # Insert a new maximum
-    bst.delete(50)  # Delete the root
-    print("Inorder traversal after edge case operations:", bst.inorder_traversal())
+if __name__ == "__main__":
+    test_insert()
+    test_search_existing()
+    test_search_non_existing()
+    test_delete_leaf()
+    test_delete_with_one_child()
+    test_delete_with_two_children()
+    test_inorder_traversal()
+    print("All tests completed")
