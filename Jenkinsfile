@@ -27,7 +27,7 @@ pipeline {
                     . venv/bin/activate
                     echo "Installing requirements:"
                     if [ -f Testing/Tree/requirements.txt ]; then
-                        pip install -r Testing/Tree/requirements.txt --break-system-package
+                        pip install -r Testing/Tree/requirements.txt --break-system-packages
                     else
                         echo "requirements.txt not found in Testing/Tree/. Please check the file location."
                         exit 1
@@ -42,6 +42,11 @@ pipeline {
                 sh '''
                     . venv/bin/activate
                     if [ -f Testing/Tree/tree-testing.py ]; then
+                        # Add the parent directory of Tree to PYTHONPATH
+                        export PYTHONPATH=$PYTHONPATH:$PWD
+                        echo "PYTHONPATH is set to: $PYTHONPATH"
+                        echo "Contents of Tree directory:"
+                        ls -la Tree/
                         python3 Testing/Tree/tree-testing.py
                     else
                         echo "tree-testing.py not found in Testing/Tree/. Please check the file location."
