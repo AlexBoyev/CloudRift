@@ -1,28 +1,34 @@
-# Use the official Jenkins image as the base
-FROM jenkins/jenkins:lts
+# Stage 1: Use a Python base image to install Python and dependencies
+FROM python:3.9-slim AS python-builder
 
-# Switch to the root user to install system packages
-USER root
-
-# Install Python 3, pip3, and any necessary system dependencies
-#RUN apt-get update && \
-#    apt-get install -y python3 python3-pip python3-virtualenv && \
-#    rm -rf /var/lib/apt/lists/*
-
-# Optionally install git (if not already included in the Jenkins base image)
-RUN apt-get install -y git
+# Install git (if needed for your setup)
+RUN apt-get update && \
+    apt-get install -y git && \
+    rm -rf /var/lib/apt/lists/*
 
 # Ensure pip3 is updated to the latest version
-#RUN pip3 install --upgrade pip
+RUN pip3 install --upgrade pip
 
-# Switch back to the Jenkins user
-USER jenkins
+# Optionally create virtualenv if needed (this can be customized)
+RUN python3 -m venv /venv
 
-# Expose Jenkins port (optional, the default is 8080)
+# Stage 2: Use the official Jenkins image as the base
+FROM jenkins/jenkins:lts
+
+# Copy Python and git from the python-builder stage
+COPY --from=python-builder /usr/local/bin/python3 /usr/local/bin/python3
+COPY --from=python-builder /usr/local/bin/pip3 /usr/local/bin/pip3
+COPY --from=python-builder /usr/bin/git /usr/bin/git
+COPY --from=python-builder /venv /venv
+
+# Optionally expose Jenkins port (8080 is the default)
 EXPOSE 8080
 
-# Define the Jenkins home directory (optional)
+# Define Jenkins home directory (optional)
 ENV JENKINS_HOME /var/jenkins_home
+
+# Use the virtualenv Python path (optional)
+ENV PATH="/venv/bin:$PATH"
 
 # Run the Jenkins server
 CMD ["java", "-jar", "/usr/share/jenkins/jenkins.war"]
