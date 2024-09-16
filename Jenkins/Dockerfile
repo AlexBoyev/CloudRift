@@ -5,9 +5,9 @@ FROM jenkins/jenkins:lts
 USER root
 
 # Install Python 3, pip3, and any necessary system dependencies
-RUN apt-get update && \
-    apt-get install -y python3 python3-pip python3-virtualenv && \
-    rm -rf /var/lib/apt/lists/*
+#RUN apt-get update && \
+#    apt-get install -y python3 python3-pip python3-virtualenv && \
+#    rm -rf /var/lib/apt/lists/*
 
 # Optionally install git (if not already included in the Jenkins base image)
 RUN apt-get install -y git
