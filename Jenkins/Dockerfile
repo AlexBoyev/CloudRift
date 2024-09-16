@@ -13,7 +13,7 @@ USER root
 RUN apt-get install -y git
 
 # Ensure pip3 is updated to the latest version
-RUN pip3 install --upgrade pip
+#RUN pip3 install --upgrade pip
 
 # Switch back to the Jenkins user
 USER jenkins
