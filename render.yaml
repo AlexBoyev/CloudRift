@@ -8,9 +8,6 @@ services:
     envVars:
       - key: JENKINS_HOME
         value: /var/jenkins_home
-    ports:
-      - port: 8080  # Default Jenkins port
-        protocol: HTTP
     disk:
       name: jenkins_home_1
       mountPath: /var/jenkins_home
@@ -25,9 +22,6 @@ services:
     envVars:
       - key: JENKINS_HOME
         value: /var/jenkins_home
-    ports:
-      - port: 8080
-        protocol: HTTP
     disk:
       name: jenkins_home_2
       mountPath: /var/jenkins_home
@@ -42,9 +36,6 @@ services:
     envVars:
       - key: JENKINS_HOME
         value: /var/jenkins_home
-    ports:
-      - port: 8080
-        protocol: HTTP
     disk:
       name: jenkins_home_3
       mountPath: /var/jenkins_home
