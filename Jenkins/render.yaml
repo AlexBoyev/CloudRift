@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  jenkins_1:
+    build:
+      context: .  # The directory containing your Dockerfile
+      dockerfile: Dockerfile  # Optional if the file is named Dockerfile
+    container_name: jenkins_server_1
+    ports:
+      - "8081:8080"  # Map host port 8081 to container's 8080 (Jenkins UI)
+      - "50001:50000"  # Map agent port
+    environment:
+      - JENKINS_HOME=/var/jenkins_home
+    volumes:
+      - jenkins_home_1:/var/jenkins_home  # Persist Jenkins 1 data
+      - /var/run/docker.sock:/var/run/docker.sock  # Optional: enable Docker commands inside Jenkins
+
+  jenkins_2:
+    build:
+      context: .  # Same Dockerfile is reused for the second Jenkins instance
+      dockerfile: Dockerfile
+    container_name: jenkins_server_2
+    ports:
+      - "8082:8080"  # Map host port 8082 to container's 8080 (Jenkins UI)
+      - "50002:50000"  # Map agent port
+    environment:
+      - JENKINS_HOME=/var/jenkins_home
+    volumes:
+      - jenkins_home_2:/var/jenkins_home  # Persist Jenkins 2 data
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  jenkins_3:
+    build:
+      context: .  # Reuse the same Dockerfile for the third Jenkins instance
+      dockerfile: Dockerfile
+    container_name: jenkins_server_3
+    ports:
+      - "8083:8080"  # Map host port 8083 to container's 8080 (Jenkins UI)
+      - "50003:50000"  # Map agent port
+    environment:
+      - JENKINS_HOME=/var/jenkins_home
+    volumes:
+      - jenkins_home_3:/var/jenkins_home  # Persist Jenkins 3 data
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  jenkins_home_1:
+  jenkins_home_2:
+  jenkins_home_3:
