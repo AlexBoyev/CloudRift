@@ -1,19 +1,26 @@
+# Use an official Python runtime as a parent image
 FROM python:3.9-slim
 
+# Install networking tools
+RUN apt-get update && apt-get install -y iputils-ping
+
+# Set the working directory in the container
 WORKDIR /app
 
-# Copy only the necessary files and directories
-COPY requirements.txt .
-COPY Tree ./Tree
+# Copy the current directory contents into the container at /app/Tree
+COPY . /app/Tree
 
-# Install the Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Set the working directory to /app (one level up from Tree)
+WORKDIR /app
 
-# Set the Python path to include the Tree directory
-ENV PYTHONPATH=/app
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r Tree/requirements.txt
 
-# Expose the port the app runs on
+# Expose port 5000 (match Flask internal port with what Nginx is expecting)
 EXPOSE 5000
 
-# Run the application
-CMD ["python", "Tree/BST_Service.py"]
+# Set the Python path to include the app directory
+ENV PYTHONPATH="/app:${PYTHONPATH}"
+
+# Run BST_Service.py when the container launches
+CMD ["python", "-c", "from Tree.BST_Service import app; app.run(host='0.0.0.0', port=5000)"]

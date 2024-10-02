@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  nginx:
+    build:
+      context: ./nginx
+    container_name: nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - backend_api
+      - bst_tree
+      - jenkins
+    networks:
+      - cloudrift_net
+
+  backend_api:
+    build:
+      context: .
+    container_name: backend_api
+    expose:
+      - "5000"
+    networks:
+      - cloudrift_net
+
+  bst_tree:
+    build:
+      context: ../Tree
+    container_name: bst_tree
+    expose:
+      - "5000"
+    networks:
+      - cloudrift_net
+
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    expose:
+      - "8080"
+    environment:
+      - JENKINS_OPTS="--prefix=/jenkins"
+    networks:
+      - cloudrift_net
+    volumes:
+      - jenkins-data:/var/jenkins_home
+
+networks:
+  cloudrift_net:
+    driver: bridge
+
+volumes:
+  jenkins-data:
+    external: true
