@@ -1,59 +1,146 @@
 pipeline {
     agent any
+    
     triggers {
         githubPush()
     }
+    
+    options {
+        // Add timestamps to console output
+        timestamps()
+        // Discard old builds
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        // Timeout for the entire pipeline
+        timeout(time: 1, unit: 'HOURS')
+    }
+
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
-                sh 'pwd'
-                sh 'ls -la'
-                sh 'git branch --show-current'
-                sh 'git rev-parse HEAD'
+                script {
+                    try {
+                        checkout scm
+                        sh '''
+                            echo "Current directory: $(pwd)"
+                            echo "Directory contents:"
+                            ls -la
+                            echo "Current branch: $(git branch --show-current)"
+                            echo "Current commit: $(git rev-parse HEAD)"
+                        '''
+                    } catch (Exception e) {
+                        currentBuild.result = 'FAILURE'
+                        error "Failed to checkout code: ${e.message}"
+                    }
+                }
             }
         }
+
         stage('Setup Python Environment') {
             steps {
-                sh '''
-                    echo "Python version:"
-                    python3 --version
-                    echo "Pip version:"
-                    pip3 --version
-                    echo "Creating virtual environment:"
-                    python3 -m venv venv
-                    . venv/bin/activate
-                    echo "Installing requirements:"
-                    if [ -f Testing/Tree/requirements.txt ]; then
-                        pip install -r Testing/Tree/requirements.txt
-                    else
-                        echo "requirements.txt not found in Testing/Tree/. Please check the file location."
-                        exit 1
-                    fi
-                    echo "Installed packages:"
-                    pip list
-                '''
+                script {
+                    try {
+                        sh '''
+                            echo "System Python version:"
+                            python3 --version || (echo "Python3 not found" && exit 1)
+                            
+                            echo "System Pip version:"
+                            pip3 --version || (echo "Pip3 not found" && exit 1)
+                            
+                            echo "Creating virtual environment..."
+                            # Remove existing venv if it exists
+                            rm -rf venv
+                            python3 -m venv venv
+                            
+                            echo "Activating virtual environment..."
+                            . venv/bin/activate
+                            
+                            echo "Upgrading pip..."
+                            pip install --upgrade pip
+                            
+                            echo "Checking for requirements.txt..."
+                            if [ -f Testing/Tree/requirements.txt ]; then
+                                echo "Installing requirements from Testing/Tree/requirements.txt"
+                                pip install -r Testing/Tree/requirements.txt
+                            else
+                                echo "ERROR: requirements.txt not found in Testing/Tree/"
+                                echo "Current directory structure:"
+                                find . -name "requirements.txt"
+                                exit 1
+                            fi
+                            
+                            echo "Installed packages:"
+                            pip list
+                        '''
+                    } catch (Exception e) {
+                        currentBuild.result = 'FAILURE'
+                        error "Failed to setup Python environment: ${e.message}"
+                    }
+                }
             }
         }
+
         stage('Run Tests') {
             steps {
-                sh '''
-                    . venv/bin/activate
-                    if [ -f Testing/Tree/tree-testing.py ]; then
-                        export PYTHONPATH=$PYTHONPATH:$PWD
-                        echo "PYTHONPATH is set to: $PYTHONPATH"
-                        python3 Testing/Tree/tree-testing.py
-                    else
-                        echo "tree-testing.py not found in Testing/Tree/. Please check the file location."
-                        exit 1
-                    fi
-                '''
+                script {
+                    try {
+                        sh '''
+                            echo "Activating virtual environment..."
+                            . venv/bin/activate
+                            
+                            # Add the project root to PYTHONPATH
+                            export PYTHONPATH="$PYTHONPATH:$PWD"
+                            echo "PYTHONPATH is set to: $PYTHONPATH"
+                            
+                            if [ -f Testing/Tree/tree-testing.py ]; then
+                                echo "Running tests..."
+                                python3 Testing/Tree/tree-testing.py
+                                
+                                # Check the exit code of the test run
+                                TEST_EXIT_CODE=$?
+                                if [ $TEST_EXIT_CODE -ne 0 ]; then
+                                    echo "Tests failed with exit code: $TEST_EXIT_CODE"
+                                    exit $TEST_EXIT_CODE
+                                fi
+                            else
+                                echo "ERROR: tree-testing.py not found in Testing/Tree/"
+                                echo "Current directory structure:"
+                                find . -name "tree-testing.py"
+                                exit 1
+                            fi
+                        '''
+                    } catch (Exception e) {
+                        currentBuild.result = 'FAILURE'
+                        error "Tests failed: ${e.message}"
+                    }
+                }
             }
         }
     }
+
     post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed! Check the logs for details.'
+        }
         always {
-            cleanWs()
+            script {
+                // Clean workspace
+                cleanWs(
+                    cleanWhenSuccess: true,
+                    cleanWhenFailure: true,
+                    cleanWhenAborted: true,
+                    deleteDirs: true
+                )
+                
+                // Clean up virtual environment
+                sh '''
+                    if [ -d "venv" ]; then
+                        rm -rf venv
+                    fi
+                '''
+            }
         }
     }
 }
