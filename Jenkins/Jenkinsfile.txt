@@ -6,11 +6,8 @@ pipeline {
     }
     
     options {
-        // Add timestamps to console output
         timestamps()
-        // Discard old builds
         buildDiscarder(logRotator(numToKeepStr: '10'))
-        // Timeout for the entire pipeline
         timeout(time: 1, unit: 'HOURS')
     }
 
@@ -41,35 +38,17 @@ pipeline {
                     try {
                         sh '''
                             echo "System Python version:"
-                            python3 --version || (echo "Python3 not found" && exit 1)
-                            
-                            echo "System Pip version:"
-                            pip3 --version || (echo "Pip3 not found" && exit 1)
+                            python3 --version
                             
                             echo "Creating virtual environment..."
-                            # Remove existing venv if it exists
-                            rm -rf venv
-                            python3 -m venv venv
+                            rm -rf .venv
+                            python3 -m venv .venv
                             
                             echo "Activating virtual environment..."
-                            . venv/bin/activate
+                            source .venv/bin/activate
                             
                             echo "Upgrading pip..."
                             pip install --upgrade pip
-                            
-                            echo "Checking for requirements.txt..."
-                            if [ -f Testing/Tree/requirements.txt ]; then
-                                echo "Installing requirements from Testing/Tree/requirements.txt"
-                                pip install -r Testing/Tree/requirements.txt
-                            else
-                                echo "ERROR: requirements.txt not found in Testing/Tree/"
-                                echo "Current directory structure:"
-                                find . -name "requirements.txt"
-                                exit 1
-                            fi
-                            
-                            echo "Installed packages:"
-                            pip list
                         '''
                     } catch (Exception e) {
                         currentBuild.result = 'FAILURE'
@@ -84,29 +63,22 @@ pipeline {
                 script {
                     try {
                         sh '''
-                            echo "Activating virtual environment..."
-                            . venv/bin/activate
+                            source .venv/bin/activate
                             
-                            # Add the project root to PYTHONPATH
-                            export PYTHONPATH="$PYTHONPATH:$PWD"
-                            echo "PYTHONPATH is set to: $PYTHONPATH"
+                            # Print directory structure before adjusting PYTHONPATH
+                            echo "Workspace contents:"
+                            ls -la
                             
-                            if [ -f Testing/Tree/tree-testing.py ]; then
-                                echo "Running tests..."
-                                python3 Testing/Tree/tree-testing.py
-                                
-                                # Check the exit code of the test run
-                                TEST_EXIT_CODE=$?
-                                if [ $TEST_EXIT_CODE -ne 0 ]; then
-                                    echo "Tests failed with exit code: $TEST_EXIT_CODE"
-                                    exit $TEST_EXIT_CODE
-                                fi
-                            else
-                                echo "ERROR: tree-testing.py not found in Testing/Tree/"
-                                echo "Current directory structure:"
-                                find . -name "tree-testing.py"
-                                exit 1
-                            fi
+                            # Add parent directory to PYTHONPATH
+                            export PYTHONPATH=$PWD
+                            
+                            echo "PYTHONPATH: $PYTHONPATH"
+                            echo "Directory structure:"
+                            ls -R
+                            
+                            # Run tests
+                            cd Testing/Tree
+                            python3 tree-testing.py
                         '''
                     } catch (Exception e) {
                         currentBuild.result = 'FAILURE'
@@ -126,18 +98,15 @@ pipeline {
         }
         always {
             script {
-                // Clean workspace
                 cleanWs(
                     cleanWhenSuccess: true,
                     cleanWhenFailure: true,
                     cleanWhenAborted: true,
                     deleteDirs: true
                 )
-                
-                // Clean up virtual environment
                 sh '''
-                    if [ -d "venv" ]; then
-                        rm -rf venv
+                    if [ -d ".venv" ]; then
+                        rm -rf .venv
                     fi
                 '''
             }
