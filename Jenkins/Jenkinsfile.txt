@@ -4,49 +4,26 @@ pipeline {
     triggers {
         githubPush()
     }
-    
-    options {
-        timestamps()
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        timeout(time: 1, unit: 'HOURS')
-    }
 
     stages {
-        stage('Debug Workspace') {
-            steps {
-                sh '''
-                    echo "=================== DEBUG INFO ==================="
-                    echo "PWD: $(pwd)"
-                    echo "Workspace: $WORKSPACE"
-                    echo "Directory Tree:"
-                    tree .
-                    echo "=================== END DEBUG ==================="
-                '''
-            }
-        }
-
-        stage('Setup Python Environment') {
+        stage('Setup') {
             steps {
                 script {
                     try {
+                        checkout scm
                         sh '''
+                            echo "Workspace contents:"
+                            ls -la
+                            
                             echo "Python version:"
                             python3 --version
                             
-                            echo "Creating virtual environment..."
-                            rm -rf .venv
+                            # Create and activate venv
                             python3 -m venv .venv
-                            
-                            echo "Activating virtual environment..."
                             source .venv/bin/activate
-                            
-                            echo "Current directory structure:"
-                            pwd
-                            ls -R
                         '''
                     } catch (Exception e) {
-                        currentBuild.result = 'FAILURE'
-                        error "Failed to setup Python environment: ${e.message}"
+                        error "Setup failed: ${e.message}"
                     }
                 }
             }
@@ -59,33 +36,11 @@ pipeline {
                         sh '''
                             source .venv/bin/activate
                             
-                            # Debug workspace structure
-                            echo "Full directory structure before running tests:"
-                            find . -type f -name "*.py" -o -name "*.txt"
-                            
-                            # Set PYTHONPATH to the current workspace
-                            cd $WORKSPACE
-                            export PYTHONPATH=$WORKSPACE
-                            
-                            echo "Final check before running tests:"
-                            echo "Current directory: $(pwd)"
-                            echo "PYTHONPATH: $PYTHONPATH"
-                            echo "Python path contents:"
-                            python3 -c "import sys; print('\\n'.join(sys.path))"
-                            
-                            echo "Contents of Testing/Tree directory:"
-                            ls -la Testing/Tree/
-                            
-                            echo "Contents of Tree directory:"
-                            ls -la Tree/
-                            
-                            # Run tests with full path
+                            # Go to test directory and run tests
                             cd Testing/Tree
-                            python3 -c "import sys; print(sys.path); from Tree.BST import BinarySearchTree; print('Import successful')"
                             python3 tree-testing.py
                         '''
                     } catch (Exception e) {
-                        currentBuild.result = 'FAILURE'
                         error "Tests failed: ${e.message}"
                     }
                 }
@@ -95,11 +50,7 @@ pipeline {
 
     post {
         always {
-            script {
-                echo "Final workspace contents:"
-                sh 'ls -R'
-                cleanWs()
-            }
+            cleanWs()
         }
     }
 }
