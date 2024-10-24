@@ -21,8 +21,6 @@ pipeline {
                             echo "Current directory: $(pwd)"
                             echo "Directory contents:"
                             ls -la
-                            echo "Current branch: $(git branch --show-current)"
-                            echo "Current commit: $(git rev-parse HEAD)"
                         '''
                     } catch (Exception e) {
                         currentBuild.result = 'FAILURE'
@@ -37,7 +35,7 @@ pipeline {
                 script {
                     try {
                         sh '''
-                            echo "System Python version:"
+                            echo "Python version:"
                             python3 --version
                             
                             echo "Creating virtual environment..."
@@ -46,9 +44,6 @@ pipeline {
                             
                             echo "Activating virtual environment..."
                             source .venv/bin/activate
-                            
-                            echo "Upgrading pip..."
-                            pip install --upgrade pip
                         '''
                     } catch (Exception e) {
                         currentBuild.result = 'FAILURE'
@@ -65,16 +60,16 @@ pipeline {
                         sh '''
                             source .venv/bin/activate
                             
-                            # Print directory structure before adjusting PYTHONPATH
+                            # Debug: Show workspace contents
                             echo "Workspace contents:"
                             ls -la
                             
-                            # Add parent directory to PYTHONPATH
-                            export PYTHONPATH=$PWD
+                            # Set PYTHONPATH to the current workspace
+                            export PYTHONPATH=$WORKSPACE
                             
                             echo "PYTHONPATH: $PYTHONPATH"
-                            echo "Directory structure:"
-                            ls -R
+                            echo "Tree directory contents:"
+                            ls -la Tree/
                             
                             # Run tests
                             cd Testing/Tree
