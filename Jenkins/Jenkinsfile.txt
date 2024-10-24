@@ -12,21 +12,16 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
+        stage('Debug Workspace') {
             steps {
-                script {
-                    try {
-                        checkout scm
-                        sh '''
-                            echo "Current directory: $(pwd)"
-                            echo "Directory contents:"
-                            ls -la
-                        '''
-                    } catch (Exception e) {
-                        currentBuild.result = 'FAILURE'
-                        error "Failed to checkout code: ${e.message}"
-                    }
-                }
+                sh '''
+                    echo "=================== DEBUG INFO ==================="
+                    echo "PWD: $(pwd)"
+                    echo "Workspace: $WORKSPACE"
+                    echo "Directory Tree:"
+                    tree .
+                    echo "=================== END DEBUG ==================="
+                '''
             }
         }
 
@@ -44,6 +39,10 @@ pipeline {
                             
                             echo "Activating virtual environment..."
                             source .venv/bin/activate
+                            
+                            echo "Current directory structure:"
+                            pwd
+                            ls -R
                         '''
                     } catch (Exception e) {
                         currentBuild.result = 'FAILURE'
@@ -60,19 +59,29 @@ pipeline {
                         sh '''
                             source .venv/bin/activate
                             
-                            # Debug: Show workspace contents
-                            echo "Workspace contents:"
-                            ls -la
+                            # Debug workspace structure
+                            echo "Full directory structure before running tests:"
+                            find . -type f -name "*.py" -o -name "*.txt"
                             
                             # Set PYTHONPATH to the current workspace
+                            cd $WORKSPACE
                             export PYTHONPATH=$WORKSPACE
                             
+                            echo "Final check before running tests:"
+                            echo "Current directory: $(pwd)"
                             echo "PYTHONPATH: $PYTHONPATH"
-                            echo "Tree directory contents:"
+                            echo "Python path contents:"
+                            python3 -c "import sys; print('\\n'.join(sys.path))"
+                            
+                            echo "Contents of Testing/Tree directory:"
+                            ls -la Testing/Tree/
+                            
+                            echo "Contents of Tree directory:"
                             ls -la Tree/
                             
-                            # Run tests
+                            # Run tests with full path
                             cd Testing/Tree
+                            python3 -c "import sys; print(sys.path); from Tree.BST import BinarySearchTree; print('Import successful')"
                             python3 tree-testing.py
                         '''
                     } catch (Exception e) {
@@ -85,25 +94,11 @@ pipeline {
     }
 
     post {
-        success {
-            echo 'Pipeline completed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed! Check the logs for details.'
-        }
         always {
             script {
-                cleanWs(
-                    cleanWhenSuccess: true,
-                    cleanWhenFailure: true,
-                    cleanWhenAborted: true,
-                    deleteDirs: true
-                )
-                sh '''
-                    if [ -d ".venv" ]; then
-                        rm -rf .venv
-                    fi
-                '''
+                echo "Final workspace contents:"
+                sh 'ls -R'
+                cleanWs()
             }
         }
     }
