@@ -6,74 +6,41 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
+        stage('Test') {
             steps {
-                script {
-                    try {
-                        checkout scm
-                        sh '''
-                            echo "Workspace contents:"
-                            ls -la
-                        '''
-                    } catch (Exception e) {
-                        error "Checkout failed: ${e.message}"
-                    }
-                }
-            }
-        }
+                sh '''
+                    #!/bin/bash
+                    set -xe
 
-        stage('Setup Python') {
-            steps {
-                script {
-                    try {
-                        sh '''
-                            echo "Python version:"
-                            python3 --version
-                            
-                            echo "Setting up virtual environment..."
-                            python3 -m venv .venv
-                            source .venv/bin/activate
-                            
-                            # Install any requirements if needed
-                            if [ -f Tree/requirements.txt ]; then
-                                pip install -r Tree/requirements.txt
-                            fi
-                        '''
-                    } catch (Exception e) {
-                        error "Setup failed: ${e.message}"
-                    }
-                }
-            }
-        }
+                    # Print Python version
+                    python3 --version
 
-        stage('Run Tests') {
-            steps {
-                script {
-                    try {
-                        sh '''
-                            source .venv/bin/activate
-                            
-                            # Show the directory structure
-                            echo "Current directory: $(pwd)"
-                            echo "Contents:"
-                            ls -la
-                            
-                            # Add current directory to PYTHONPATH
-                            export PYTHONPATH=$PYTHONPATH:$(pwd)
-                            
-                            # Run the tests
-                            cd Testing/Tree
-                            python3 tree-testing.py
-                        '''
-                    } catch (Exception e) {
-                        error "Tests failed: ${e.message}"
-                    }
-                }
+                    # Print current directory and contents
+                    pwd
+                    ls -la
+
+                    # Create and activate virtual environment
+                    python3 -m venv .venv
+                    source .venv/bin/activate
+
+                    # Setup PYTHONPATH
+                    export PYTHONPATH=$WORKSPACE
+
+                    # Run tests
+                    cd Testing/Tree
+                    python3 tree-testing.py
+                '''
             }
         }
     }
 
     post {
+        success {
+            echo 'Tests passed successfully!'
+        }
+        failure {
+            echo 'Tests failed!'
+        }
         always {
             cleanWs()
         }
