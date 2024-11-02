@@ -1,15 +1,7 @@
 from flask import Flask, request, jsonify, render_template_string
-from Tree.BST import BinarySearchTree
-from flask_cors import CORS
 import logging
 import sys
-
-ALLOWED_IPS = [
-    '85.250.3.222',
-    '85.64.250.103',
-    'localhost'
-    # Add more IPs as needed
-]
+from Tree.BST import BinarySearchTree
 
 app = Flask(__name__)
 
@@ -17,39 +9,19 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler(sys.stdout)])
 logger = logging.getLogger('BST-API')
 
-# Allow all origins with CORS
-
-
-# Generate the list of allowed origins based on IP addresses
-ALLOWED_ORIGINS = [f"http://{ip}" for ip in ALLOWED_IPS] + [f"https://{ip}" for ip in ALLOWED_IPS]
-
-# Print out allowed origins for debugging
-logger.debug(f"Allowed Origins: {ALLOWED_ORIGINS}")
-
-# Apply Flask-CORS, but only for the specific allowed origins
-CORS(app, resources={r"/*": {
-    "origins": ALLOWED_ORIGINS,
-    "methods": ["GET", "POST", "DELETE", "OPTIONS"],
-    "allow_headers": ["Content-Type", "Authorization"],
-    "expose_headers": ["Content-Type", "Authorization"]
-}})
-
 # Binary Search Tree instance
 bst = BinarySearchTree()
 
-
-# Log request origin for debugging purposes
+# Log request information for debugging purposes
 @app.before_request
 def log_request_info():
     logger.info(
         f"Request from origin: {request.origin}, path: {request.path}, method: {request.method}, headers: {request.headers}")
 
-
 @app.after_request
 def log_response_info(response):
     logger.info(f"Response: {response.status_code} for {request.path}")
     return response
-
 
 # Define the 'about' route
 @app.route('/about', methods=['GET'])
@@ -57,7 +29,7 @@ def about():
     logger.debug("Processing /about route")
     return jsonify({"traversal": "shikaka"}), 200
 
-
+# Documentation home page
 @app.route('/', methods=['GET'])
 def home():
     logger.debug("Processing / route (home)")
@@ -163,7 +135,6 @@ curl -X POST http://localhost/create \\
     """
     return render_template_string(html_template)
 
-
 # Route to insert a node
 @app.route('/insert', methods=['POST'])
 def insert():
@@ -180,7 +151,6 @@ def insert():
         logger.warning("Insert request failed: No key provided")
         return jsonify({"error": "No key provided"}), 400
 
-
 # Route to search for a node by key
 @app.route('/search/<int:key>', methods=['GET'])
 def search(key):
@@ -194,7 +164,6 @@ def search(key):
         logger.warning(f"Key {key} not found")
         return jsonify({"message": f"{key} not found"}), 404
 
-
 # Route to delete a node by key
 @app.route('/delete/<int:key>', methods=['DELETE'])
 def delete(key):
@@ -203,7 +172,6 @@ def delete(key):
     logger.info(f"Deleted key {key}")
     return jsonify({"message": f"Deleted {key}"}), 200
 
-
 # Route for in-order traversal
 @app.route('/traverse', methods=['GET'])
 def traverse():
@@ -211,7 +179,6 @@ def traverse():
     traversal = bst.inorder_traversal()
     logger.info(f"Inorder traversal: {traversal}")
     return jsonify({"traversal": traversal}), 200
-
 
 # Route to create a tree with multiple keys
 @app.route('/create', methods=['POST'])
@@ -229,7 +196,6 @@ def create_tree():
 
     return jsonify({"message": f"Created tree with keys: {[item['key'] for item in keys]}"}), 201
 
-
 # Route to display the tree structure
 @app.route('/display', methods=['GET'])
 def display_tree():
@@ -237,7 +203,6 @@ def display_tree():
     tree_structure = bst.display()
     logger.info(f"Tree structure: {tree_structure}")
     return jsonify({"tree_structure": tree_structure}), 200
-
 
 # Start the Flask app
 if __name__ == '__main__':

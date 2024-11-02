@@ -4,7 +4,7 @@ import os
 # Add the parent directory to the Python path to import BST
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from Tree.BST import BinarySearchTree
+from Tree import BinarySearchTree
 
 def extract_keys_from_traversal(traversal_result):
     """Helper function to extract keys from the inorder traversal result."""
