@@ -6,43 +6,20 @@ import logging
 app = Flask(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
-# List of allowed IP addresses
-ALLOWED_IPS = [
-    "85.250.158.198",
-    # Add more IPs here as needed
-]
-
 # Address of the BST service container (bst_tree)
-BST_SERVICE_URL = "http://bst_tree:5000"
+BST_SERVICE_URL = "http://bst_tree:5001"
 
-def is_allowed_ip(ip):
-    app.logger.debug(f"Checking IP: {ip}")
-    return (
-        ip in ALLOWED_IPS or
-        ip.startswith('172.') or  # Allow Docker network IPs
-        'ngrok' in request.headers.get('X-Forwarded-For', '')  # Allow requests coming through ngrok
-    )
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify(status="healthy"), 200
 
 # Custom CORS configuration
-def cors_origin(origin):
-    if origin:
-        client_ip = request.headers.get('X-Real-IP') or request.remote_addr
-        app.logger.debug(f"CORS request from IP: {client_ip}, Origin: {origin}")
-        return is_allowed_ip(client_ip)
-    return False
-
-CORS(app, resources={r"/*": {"origins": cors_origin}}, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 @app.before_request
 def before_request():
     app.logger.debug(f"Received request: {request.method} {request.url}")
     app.logger.debug(f"Headers: {request.headers}")
-
-    client_ip = request.headers.get('X-Real-IP') or request.remote_addr
-    app.logger.debug(f"Incoming request from IP: {client_ip}")
-    if not is_allowed_ip(client_ip):
-        app.logger.warning(f"Access denied for IP: {client_ip}")
-        return jsonify({"error": "Access denied"}), 403
 
 @app.after_request
 def after_request(response):

@@ -16,11 +16,11 @@ WORKDIR /app
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r Tree/requirements.txt
 
-# Expose port 5000 (match Flask internal port with what Nginx is expecting)
-EXPOSE 5000
+# Expose port 5001 (match Flask internal port with what Nginx is expecting)
+EXPOSE 5001
 
 # Set the Python path to include the app directory
 ENV PYTHONPATH="/app:${PYTHONPATH}"
 
 # Run BST_Service.py when the container launches
-CMD ["python", "-c", "from Tree.BST_Service import app; app.run(host='0.0.0.0', port=5000)"]
+CMD ["python", "-c", "from Tree.BST_Service import app; app.run(host='0.0.0.0', port=5001)"]

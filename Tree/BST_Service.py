@@ -207,4 +207,4 @@ def display_tree():
 # Start the Flask app
 if __name__ == '__main__':
     logger.info("Starting Binary Search Tree API")
-    app.run(host='0.0.0.0', port=80, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True)
