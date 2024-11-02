@@ -21,5 +21,21 @@
 * **Frontend**: Angular
 
 ## Project Structure
-
-< TODO > 
+- CloudRift
+  - backend_api
+    - nginx
+      - Dockerfile
+      - nginx.conf
+  - Dockerfile
+  - docker-compose.yaml
+  - Tree
+    - BST_Service.py
+    - Dockerfile
+  - Stack
+    - StackApplication.java
+    - Dockerfile
+  - Testing
+    - Tree
+      - tree-testing.py
+  - Deploy
+    - Main
