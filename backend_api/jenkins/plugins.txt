@@ -1,6 +1,0 @@
-git:latest                    # For Git SCM integration
-workflow-aggregator:latest    # For Pipeline support
-pipeline-stage-view:latest    # For Pipeline visualization
-timestamper:latest           # For adding timestamps in build logs
-ws-cleanup:latest            # For workspace cleanup
-github:latest                # For GitHub integration
