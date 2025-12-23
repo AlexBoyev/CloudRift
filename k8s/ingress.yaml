@@ -1,31 +1,38 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: main-ingress
+  name: api-ingress
   annotations:
     kubernetes.io/ingress.class: nginx
-    # GLOBAL REWRITE: This tells Nginx to always use the "2nd group" of the regex path
+    nginx.ingress.kubernetes.io/use-regex: "true"
+
+    # Strip "/api/dashboard" and forward the remainder to Flask
+    # /api/dashboard/stack/data -> /stack/data
     nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
   rules:
     - http:
         paths:
-          # 1. API Path: /api/dashboard
-          # Group 1: (/|$)  -> matches the slash
-          # Group 2: (.*)   -> matches "dashboard" (This is what gets sent)
-          - path: /api(/|$)(.*)
+          - path: /api/dashboard(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
                 name: backend-service
                 port:
                   number: 5000
-
-          # 2. UI Path: /app.js or /
-          # Group 1: ()     -> A dummy empty group (to align with the API logic)
-          # Group 2: (.*)   -> matches "app.js" (This is what gets sent)
-          - path: /()(.*)
-            pathType: ImplementationSpecific
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ui-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
             backend:
               service:
                 name: ui-service

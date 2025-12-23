@@ -1,38 +1,37 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: linkedlist-deployment
+  name: postgres-deployment
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
-      app: linkedlist
+      app: postgres
   template:
     metadata:
       labels:
-        app: linkedlist
+        app: postgres
     spec:
       containers:
-      - name: linkedlist
-        image: linkedlist-service:latest
+      - name: postgres
+        # matches the tag built by manager.py
+        image: postgres-db:latest
         imagePullPolicy: Never
         ports:
-        - containerPort: 8080
-        # --- NEW: Database Connection Info ---
+        - containerPort: 5432
         env:
-        - name: DB_HOST
-          value: "postgres-service"
-        - name: DB_USER
+        # These map to the standard Postgres Docker image variables
+        - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
               name: db-credentials
               key: username
-        - name: DB_PASSWORD
+        - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
               name: db-credentials
               key: password
-        - name: DB_NAME
+        - name: POSTGRES_DB
           valueFrom:
             secretKeyRef:
               name: db-credentials
@@ -41,11 +40,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: linkedlist-service
+  name: postgres-service
 spec:
   type: ClusterIP
   selector:
-    app: linkedlist
+    app: postgres
   ports:
-    - port: 8080
-      targetPort: 8080
+    - port: 5432
+      targetPort: 5432

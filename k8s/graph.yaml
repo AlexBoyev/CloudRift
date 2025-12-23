@@ -17,7 +17,26 @@ spec:
         image: graph-service:latest
         imagePullPolicy: Never
         ports:
-        - containerPort: 5003
+        - containerPort: 5000
+        # --- NEW: Database Connection Info ---
+        env:
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: dbname
 ---
 apiVersion: v1
 kind: Service
@@ -28,5 +47,5 @@ spec:
   selector:
     app: graph
   ports:
-    - port: 5003
-      targetPort: 5003
+    - port: 5000
+      targetPort: 5000

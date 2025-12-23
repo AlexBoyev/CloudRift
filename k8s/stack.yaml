@@ -4,6 +4,12 @@ metadata:
   name: stack-deployment
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  # ------------------------------
   selector:
     matchLabels:
       app: stack
@@ -17,7 +23,42 @@ spec:
         image: stack-service:latest
         imagePullPolicy: Never
         ports:
-        - containerPort: 5001
+        - containerPort: 80
+
+        # --- STABILITY PROBES ---
+        # Readiness: Ensures traffic only flows after DB connection is established
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          failureThreshold: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 10
+
+        env:
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: dbname
 ---
 apiVersion: v1
 kind: Service
@@ -28,5 +69,5 @@ spec:
   selector:
     app: stack
   ports:
-    - port: 5001
-      targetPort: 5001
+    - port: 80
+      targetPort: 80

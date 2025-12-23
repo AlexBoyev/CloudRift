@@ -1,99 +1,389 @@
+from __future__ import annotations
+
 from flask import Flask, jsonify, request
-# CORS is not strictly required since we use Ingress (Same Origin)
-import requests
+from flask_cors import CORS
 import os
-import random
+import sys
+import time
+import requests
+from typing import Any, Dict, Optional, Tuple
 
 app = Flask(__name__)
+CORS(app)
 
-# --- Kubernetes Service Discovery ---
-# These hostnames match the 'metadata: name' in your K8s Service YAML files.
-# Kubernetes internal DNS resolves these to the correct Pod IPs.
-STACK_SERVICE_URL = "http://stack-service:5001"
-LINKEDLIST_SERVICE_URL = "http://linkedlist-service:5002"
-GRAPH_SERVICE_URL = "http://graph-service:5003"
+# ----------------------------
+# Configuration
+# ----------------------------
+def _must_env(name: str) -> str:
+    v = os.getenv(name)
+    if not v:
+        print(f"CRITICAL ERROR: Missing environment variable {name}", file=sys.stderr)
+        sys.exit(1)
+    return v.rstrip("/")
 
 
-@app.route('/dashboard', methods=['GET'])
-def get_dashboard_data():
+STACK_URL = _must_env("STACK_URL")            # e.g. http://stack-service:80
+LINKEDLIST_URL = _must_env("LINKEDLIST_URL")  # e.g. http://linkedlist-service:8080
+GRAPH_URL = _must_env("GRAPH_URL")            # e.g. http://graph-service:5000
+
+# Keep names generic now that everything is routed via one ingress path (/api -> backend)
+UPSTREAM_TIMEOUT_SECONDS = float(os.getenv("UPSTREAM_TIMEOUT_SECONDS", "10"))
+UPSTREAM_RETRY_ATTEMPTS = int(os.getenv("UPSTREAM_RETRY_ATTEMPTS", "3"))
+UPSTREAM_RETRY_BASE_SLEEP = float(os.getenv("UPSTREAM_RETRY_BASE_SLEEP", "0.2"))
+
+_session = requests.Session()
+
+print("--- Configuration Loaded ---", file=sys.stderr)
+print(f"STACK_URL={STACK_URL}", file=sys.stderr)
+print(f"LINKEDLIST_URL={LINKEDLIST_URL}", file=sys.stderr)
+print(f"GRAPH_URL={GRAPH_URL}", file=sys.stderr)
+print(
+    f"TIMEOUT={UPSTREAM_TIMEOUT_SECONDS}s RETRIES={UPSTREAM_RETRY_ATTEMPTS} BACKOFF={UPSTREAM_RETRY_BASE_SLEEP}s",
+    file=sys.stderr,
+)
+
+
+# ----------------------------
+# Helpers
+# ----------------------------
+def _json_error(message: str, status: int, **extra: Any):
+    payload: Dict[str, Any] = {"error": message}
+    payload.update(extra)
+    return jsonify(payload), status
+
+
+def _get_json_silent() -> Dict[str, Any]:
+    return request.get_json(silent=True) or {}
+
+
+def _with_retry(fn, *args, **kwargs) -> requests.Response:
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, UPSTREAM_RETRY_ATTEMPTS + 1):
+        try:
+            return fn(*args, **kwargs)
+        except requests.RequestException as e:
+            last_exc = e
+            sleep_s = UPSTREAM_RETRY_BASE_SLEEP * (2 ** (attempt - 1))
+            print(
+                f"[WARN] upstream attempt {attempt}/{UPSTREAM_RETRY_ATTEMPTS} failed: {e}. sleep={sleep_s:.2f}s",
+                file=sys.stderr,
+            )
+            time.sleep(sleep_s)
+    assert last_exc is not None
+    raise last_exc
+
+
+def _upstream_json_or_text(resp: requests.Response) -> Tuple[Dict[str, Any], bool]:
     """
-    Aggregator Endpoint:
-    Calls all internal microservices and combines their data into one JSON response.
+    Returns (payload, is_json). If upstream returned invalid JSON, payload contains upstream_raw.
     """
-    response_data = {}
-
-    # --- 1. Interact with Stack Service (Pure C) ---
     try:
-        # Generate a random number to push
-        val_to_push = random.randint(1, 100)
+        return resp.json(), True
+    except ValueError:
+        return {"upstream_raw": resp.text}, False
 
-        # Step A: Push to Stack
-        # The C server expects a POST request with a query parameter 'val'
-        push_url = f"{STACK_SERVICE_URL}/push?val={val_to_push}"
-        requests.post(push_url, timeout=2)
 
-        # Step B: Pop from Stack
-        # The C server returns JSON on GET /pop
-        pop_url = f"{STACK_SERVICE_URL}/pop"
-        stack_response = requests.get(pop_url, timeout=2)
+def _proxy_upstream_error_if_any(resp: requests.Response) -> Optional[Tuple[Any, int]]:
+    """
+    If upstream status is >= 400, return a Flask response tuple immediately (proxy error through).
+    Otherwise return None.
+    """
+    if resp.status_code >= 400:
+        body, _ = _upstream_json_or_text(resp)
+        return jsonify(body), resp.status_code
+    return None
 
-        if stack_response.status_code == 200:
-            response_data['stack_pop'] = stack_response.json()
-        else:
-            response_data['stack_error'] = f"Status Code: {stack_response.status_code}"
 
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Stack Service Error: {e}")
-        response_data['stack_error'] = "Service Unreachable"
+# ----------------------------
+# Health
+# ----------------------------
+@app.get("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
 
-    # --- 2. Interact with Linked List Service (Java) ---
+
+# =========================================================
+# Stack APIs
+# (UI calls /api/stack/... ; Ingress rewrites /api -> / ; Backend routes are /stack/...)
+# =========================================================
+
+@app.get("/stack/data")
+def get_stack_data():
     try:
-        # Generate a random node name
-        node_val = f"Node-{random.randint(100, 999)}"
+        resp = _with_retry(
+            _session.get,
+            f"{STACK_URL}/stack",
+            timeout=UPSTREAM_TIMEOUT_SECONDS,
+        )
+        maybe_err = _proxy_upstream_error_if_any(resp)
+        if maybe_err:
+            return maybe_err
 
-        # Step A: Add to List
-        # Java server expects GET /add?val=...
-        add_url = f"{LINKEDLIST_SERVICE_URL}/add?val={node_val}"
-        requests.get(add_url, timeout=2)
+        data, _ = _upstream_json_or_text(resp)
+        return jsonify(data), resp.status_code
 
-        # Step B: Display List
-        display_url = f"{LINKEDLIST_SERVICE_URL}/display"
-        list_response = requests.get(display_url, timeout=2)
+    except requests.Timeout:
+        return _json_error("Stack service timeout", 504)
+    except requests.RequestException as e:
+        return _json_error("Stack service unavailable", 503, details=str(e))
 
-        if list_response.status_code == 200:
-            # Java sends plain text, not JSON
-            response_data['linked_list'] = list_response.text
-        else:
-            response_data['linked_list_error'] = f"Status: {list_response.status_code}"
 
-    except requests.exceptions.RequestException as e:
-        print(f"❌ LinkedList Service Error: {e}")
-        response_data['linked_list_error'] = "Service Unreachable"
+@app.post("/stack/push")
+def push_stack_item():
+    data = _get_json_silent()
+    if "value" not in data:
+        return _json_error("Invalid request: provide JSON body with integer field 'value'", 400)
 
-    # --- 3. Interact with Graph Service (Python) ---
     try:
-        # Step A: Get Graph Data
-        graph_url = f"{GRAPH_SERVICE_URL}/graph"
-        graph_response = requests.get(graph_url, timeout=2)
+        val = int(data["value"])
+    except (TypeError, ValueError):
+        return _json_error("Invalid request: 'value' must be an integer", 400)
 
-        if graph_response.status_code == 200:
-            response_data['graph'] = graph_response.json()
-        else:
-            response_data['graph_error'] = f"Status: {graph_response.status_code}"
+    try:
+        resp = _with_retry(
+            _session.post,
+            f"{STACK_URL}/push",
+            json={"value": val},
+            timeout=UPSTREAM_TIMEOUT_SECONDS,
+        )
+        maybe_err = _proxy_upstream_error_if_any(resp)
+        if maybe_err:
+            return maybe_err
 
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Graph Service Error: {e}")
-        response_data['graph_error'] = "Service Unreachable"
+        body, _ = _upstream_json_or_text(resp)
+        return jsonify(body), resp.status_code
 
-    return jsonify(response_data)
-
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Simple health check for Kubernetes liveness probes"""
-    return jsonify({"status": "healthy"}), 200
+    except requests.Timeout:
+        return _json_error("Stack service timeout", 504)
+    except requests.RequestException as e:
+        return _json_error("Stack service unavailable", 503, details=str(e))
 
 
-if __name__ == '__main__':
-    # Run on port 5000 inside the container
-    app.run(host='0.0.0.0', port=5000, debug=True)
+@app.post("/stack/pop")
+def pop_stack_item():
+    try:
+        # Use an empty JSON object (or no body) consistently.
+        # Some proxies/servers behave better when Content-Type isn't set for empty body.
+        resp = _with_retry(
+            _session.post,
+            f"{STACK_URL}/pop",
+            timeout=UPSTREAM_TIMEOUT_SECONDS,
+        )
+        maybe_err = _proxy_upstream_error_if_any(resp)
+        if maybe_err:
+            return maybe_err
+
+        body, _ = _upstream_json_or_text(resp)
+        return jsonify(body), resp.status_code
+
+    except requests.Timeout:
+        return _json_error("Stack service timeout", 504)
+    except requests.RequestException as e:
+        return _json_error("Stack service unavailable", 503, details=str(e))
+
+
+# =========================================================
+# LinkedList APIs
+# =========================================================
+
+@app.get("/list/data")
+def get_list_data():
+    try:
+        resp = _with_retry(
+            _session.get,
+            f"{LINKEDLIST_URL}/list",
+            timeout=UPSTREAM_TIMEOUT_SECONDS,
+        )
+        maybe_err = _proxy_upstream_error_if_any(resp)
+        if maybe_err:
+            return maybe_err
+
+        body, _ = _upstream_json_or_text(resp)
+        return jsonify(body), resp.status_code
+
+    except requests.Timeout:
+        return _json_error("LinkedList service timeout", 504)
+    except requests.RequestException as e:
+        return _json_error("LinkedList service unavailable", 503, details=str(e))
+
+
+@app.post("/list/add")
+def add_list_item():
+    try:
+        resp = _with_retry(
+            _session.post,
+            f"{LINKEDLIST_URL}/add",
+            json=_get_json_silent(),
+            timeout=UPSTREAM_TIMEOUT_SECONDS,
+        )
+        maybe_err = _proxy_upstream_error_if_any(resp)
+        if maybe_err:
+            return maybe_err
+
+        body, _ = _upstream_json_or_text(resp)
+        return jsonify(body), resp.status_code
+
+    except requests.Timeout:
+        return _json_error("LinkedList service timeout", 504)
+    except requests.RequestException as e:
+        return _json_error("LinkedList service unavailable", 503, details=str(e))
+
+
+@app.post("/list/delete")
+def delete_list_item():
+    try:
+        resp = _with_retry(
+            _session.post,
+            f"{LINKEDLIST_URL}/delete",
+            json=_get_json_silent(),
+            timeout=UPSTREAM_TIMEOUT_SECONDS,
+        )
+        maybe_err = _proxy_upstream_error_if_any(resp)
+        if maybe_err:
+            return maybe_err
+
+        body, _ = _upstream_json_or_text(resp)
+        return jsonify(body), resp.status_code
+
+    except requests.Timeout:
+        return _json_error("LinkedList service timeout", 504)
+    except requests.RequestException as e:
+        return _json_error("LinkedList service unavailable", 503, details=str(e))
+
+
+@app.post("/list/remove-head")
+def remove_head():
+    try:
+        resp = _with_retry(
+            _session.post,
+            f"{LINKEDLIST_URL}/remove-head",
+            timeout=UPSTREAM_TIMEOUT_SECONDS,
+        )
+        maybe_err = _proxy_upstream_error_if_any(resp)
+        if maybe_err:
+            return maybe_err
+
+        body, _ = _upstream_json_or_text(resp)
+        return jsonify(body), resp.status_code
+
+    except requests.Timeout:
+        return _json_error("LinkedList service timeout", 504)
+    except requests.RequestException as e:
+        return _json_error("LinkedList service unavailable", 503, details=str(e))
+
+
+# =========================================================
+# Graph APIs
+# =========================================================
+
+@app.get("/graph/data")
+def get_graph_data():
+    try:
+        resp = _with_retry(
+            _session.get,
+            f"{GRAPH_URL}/data",
+            timeout=UPSTREAM_TIMEOUT_SECONDS,
+        )
+        maybe_err = _proxy_upstream_error_if_any(resp)
+        if maybe_err:
+            return maybe_err
+
+        body, _ = _upstream_json_or_text(resp)
+        return jsonify(body), resp.status_code
+
+    except requests.Timeout:
+        return _json_error("Graph service timeout", 504)
+    except requests.RequestException as e:
+        return _json_error("Graph service unavailable", 503, details=str(e))
+
+
+@app.post("/graph/add-node")
+def add_graph_node():
+    try:
+        resp = _with_retry(
+            _session.post,
+            f"{GRAPH_URL}/add-node",
+            json=_get_json_silent(),
+            timeout=UPSTREAM_TIMEOUT_SECONDS,
+        )
+        maybe_err = _proxy_upstream_error_if_any(resp)
+        if maybe_err:
+            return maybe_err
+
+        body, _ = _upstream_json_or_text(resp)
+        return jsonify(body), resp.status_code
+
+    except requests.Timeout:
+        return _json_error("Graph service timeout", 504)
+    except requests.RequestException as e:
+        return _json_error("Graph service unavailable", 503, details=str(e))
+
+
+@app.post("/graph/add-edge")
+def add_edge():
+    try:
+        resp = _with_retry(
+            _session.post,
+            f"{GRAPH_URL}/add-edge",
+            json=_get_json_silent(),
+            timeout=UPSTREAM_TIMEOUT_SECONDS,
+        )
+        maybe_err = _proxy_upstream_error_if_any(resp)
+        if maybe_err:
+            return maybe_err
+
+        body, _ = _upstream_json_or_text(resp)
+        return jsonify(body), resp.status_code
+
+    except requests.Timeout:
+        return _json_error("Graph service timeout", 504)
+    except requests.RequestException as e:
+        return _json_error("Graph service unavailable", 503, details=str(e))
+
+
+@app.post("/graph/delete-node")
+def delete_graph_node():
+    try:
+        resp = _with_retry(
+            _session.post,
+            f"{GRAPH_URL}/delete-node",
+            json=_get_json_silent(),
+            timeout=UPSTREAM_TIMEOUT_SECONDS,
+        )
+        maybe_err = _proxy_upstream_error_if_any(resp)
+        if maybe_err:
+            return maybe_err
+
+        body, _ = _upstream_json_or_text(resp)
+        return jsonify(body), resp.status_code
+
+    except requests.Timeout:
+        return _json_error("Graph service timeout", 504)
+    except requests.RequestException as e:
+        return _json_error("Graph service unavailable", 503, details=str(e))
+
+
+@app.post("/graph/delete-edge")
+def delete_graph_edge():
+    try:
+        resp = _with_retry(
+            _session.post,
+            f"{GRAPH_URL}/delete-edge",
+            json=_get_json_silent(),
+            timeout=UPSTREAM_TIMEOUT_SECONDS,
+        )
+        maybe_err = _proxy_upstream_error_if_any(resp)
+        if maybe_err:
+            return maybe_err
+
+        body, _ = _upstream_json_or_text(resp)
+        return jsonify(body), resp.status_code
+
+    except requests.Timeout:
+        return _json_error("Graph service timeout", 504)
+    except requests.RequestException as e:
+        return _json_error("Graph service unavailable", 503, details=str(e))
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)

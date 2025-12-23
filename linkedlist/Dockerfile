@@ -1,16 +1,21 @@
-# Use a standard Java 17 image that exists on Docker Hub
+# OLD (Broken): FROM openjdk:17-slim
+# NEW (Working):
 FROM eclipse-temurin:17-jdk-jammy
 
 WORKDIR /app
 
-# Copy the source code
-COPY LinkedListService.java .
+# 1. Install curl (Debian based)
+RUN apt-get update && apt-get install -y curl
 
-# Compile the Java code
-RUN javac LinkedListService.java
+# 2. Download PostgreSQL JDBC Driver
+RUN mkdir -p /app/libs && \
+    curl -o /app/libs/postgresql.jar https://jdbc.postgresql.org/download/postgresql-42.6.0.jar
 
-# Expose the port defined in the code
-EXPOSE 5002
+# 3. Copy your Java source code
+COPY linkedlist/ /app/linkedlist/
 
-# Run the compiled class
-CMD ["java", "LinkedListService"]
+# 4. Compile
+RUN javac -cp ".:/app/libs/postgresql.jar" linkedlist/*.java
+
+# 5. Run
+CMD ["java", "-cp", ".:/app/libs/postgresql.jar", "linkedlist.LinkedListService"]

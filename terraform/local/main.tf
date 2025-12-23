@@ -1,7 +1,17 @@
-# terraform/local/main.tf
+# --- REMOVED PROVIDER CONFIG (It is already in providers.tf) ---
 
 locals {
   k8s_dir = "${path.module}/../../k8s"
+}
+
+# 1. Create the Namespace FIRST (Gatekeeper)
+resource "kubectl_manifest" "ingress_namespace" {
+  yaml_body = <<YAML
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
+YAML
 }
 
 # --- backend.yaml ---
@@ -21,6 +31,16 @@ data "kubectl_file_documents" "graph" {
 
 resource "kubectl_manifest" "graph" {
   for_each  = data.kubectl_file_documents.graph.manifests
+  yaml_body = each.value
+}
+
+# --- postgres.yaml ---
+data "kubectl_file_documents" "postgres" {
+  content = file("${local.k8s_dir}/postgres.yaml")
+}
+
+resource "kubectl_manifest" "postgres" {
+  for_each  = data.kubectl_file_documents.postgres.manifests
   yaml_body = each.value
 }
 
@@ -70,6 +90,8 @@ data "kubectl_file_documents" "ingress_controller" {
 }
 
 resource "kubectl_manifest" "ingress_controller" {
+  depends_on = [kubectl_manifest.ingress_namespace]
+
   for_each  = data.kubectl_file_documents.ingress_controller.manifests
   yaml_body = each.value
 }
